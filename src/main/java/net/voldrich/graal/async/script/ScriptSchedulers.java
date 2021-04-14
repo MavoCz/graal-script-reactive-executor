@@ -41,6 +41,10 @@ public class ScriptSchedulers {
         return schedulerList.get(nextScheduler);
     }
 
+    public void dispose() {
+        schedulerList.forEach(Scheduler::dispose);
+    }
+
     private static final class ScriptSchedulerThreadFactory implements ThreadFactory {
         public final String name;
 

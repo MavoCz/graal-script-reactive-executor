@@ -153,6 +153,14 @@ public class AsyncScriptExecutor {
         scriptContextImpl.getScheduler().schedule(scriptContextImpl::close);
     }
 
+    public Engine getEngine() {
+        return engine;
+    }
+
+    public ScriptSchedulers getScriptSchedulers() {
+        return scriptSchedulers;
+    }
+
     @Getter
     @Setter
     @Accessors(chain = true)
