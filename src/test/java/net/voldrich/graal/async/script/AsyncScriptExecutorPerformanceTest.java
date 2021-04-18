@@ -3,11 +3,12 @@ package net.voldrich.graal.async.script;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.logging.LoggingMeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import net.voldrich.graal.async.ScriptTestUtils;
 import net.voldrich.graal.async.api.ScriptMockedHttpClient;
 import net.voldrich.graal.async.api.ScriptMockedHttpResponse;
-import net.voldrich.graal.async.api.ScriptTimeout;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.*;
 import reactor.core.publisher.Flux;
@@ -26,7 +27,7 @@ public class AsyncScriptExecutorPerformanceTest {
     private AsyncScriptExecutor executor;
 
     private static final int numberOfWarmupRequests = 100;
-    private static final int numberOfRequests = 10000;
+    private static final int numberOfRequests = 100000;
 
     //private static final int concurrency = 10;
     private static final int concurrency = Queues.SMALL_BUFFER_SIZE;
@@ -37,6 +38,8 @@ public class AsyncScriptExecutorPerformanceTest {
 
     @BeforeAll
     static void beforeAll() {
+        LoggingMeterRegistry loggingMeterRegistry = new LoggingMeterRegistry();
+        Metrics.addRegistry(loggingMeterRegistry);
         Schedulers.enableMetrics();
     }
 

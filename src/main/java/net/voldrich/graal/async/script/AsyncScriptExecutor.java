@@ -42,12 +42,14 @@ public class AsyncScriptExecutor {
     }
 
     public Mono<String> executeScript(Source source, Consumer<ScriptContext> contextDecorator) {
-        Scheduler scheduler = scriptSchedulers.getNextScheduler();
-        return Mono.using(
-                () -> createNewContext(source, contextDecorator, scheduler),
-                this::evaluateAndExecuteScript,
-                this::closeContext
-        ).subscribeOn(scheduler);
+        return Mono.defer(() -> {
+            Scheduler scheduler = scriptSchedulers.getNextScheduler();
+            return Mono.using(
+                    () -> createNewContext(source, contextDecorator, scheduler),
+                    this::evaluateAndExecuteScript,
+                    this::closeContext
+            ).subscribeOn(scheduler);
+        });
     }
 
     public Source parseScript(String script) {

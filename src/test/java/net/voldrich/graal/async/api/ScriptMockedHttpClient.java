@@ -33,8 +33,8 @@ public class ScriptMockedHttpClient {
         }
         Mono<ScriptMockedHttpResponse> operation = Mono.delay(Duration.ofMillis(response.responseTimeoutMs))
                 .thenReturn(response)
-                .doOnSubscribe(subscription -> log.debug("Request {} started", url))
-                .doOnSuccess(result -> log.debug("Request {} finished", url));
+                .doOnSubscribe(subscription -> log.trace("Request {} started", url))
+                .doOnSuccess(result -> log.trace("Request {} finished", url));
         return scriptContext.executeAsPromise(operation, "get " + url);
     }
 }

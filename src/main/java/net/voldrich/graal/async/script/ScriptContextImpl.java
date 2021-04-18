@@ -86,7 +86,7 @@ class ScriptContextImpl implements ScriptContext {
 
     private synchronized void close(boolean force) {
         if (!closed) {
-            log.debug("Closing context, force: {}", force);
+            log.trace("Closing context, force: {}", force);
             this.closed = true;
             this.context.close(force);
             if (!runningOperationMap.isEmpty()) {
