@@ -79,7 +79,9 @@ public class AsyncScriptExecutor {
 
         return functionExecution
                 .flatMap(response -> resolvePromise(response, scriptContextImpl))
-                .map(value -> stringifyToString(scriptContextImpl.getContext(), value));
+                .map(value -> stringifyToString(scriptContextImpl.getContext(), value))
+                .name("script-execution")
+                .metrics();
     }
 
     private Mono<Object> resolvePromise(Object response, ScriptContextImpl scriptContextImpl) {
@@ -151,6 +153,14 @@ public class AsyncScriptExecutor {
         // AsyncScriptExecutor.wrapMonoInPromise subscribe call which invokes promise handler basically bubbles to
         // using.close operator, which closes the context which is evaluating the promise belonging to that context.
         scriptContextImpl.getScheduler().schedule(scriptContextImpl::close);
+    }
+
+    public Engine getEngine() {
+        return engine;
+    }
+
+    public ScriptSchedulers getScriptSchedulers() {
+        return scriptSchedulers;
     }
 
     @Getter
