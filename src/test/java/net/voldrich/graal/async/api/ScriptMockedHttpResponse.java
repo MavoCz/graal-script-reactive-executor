@@ -14,7 +14,7 @@ public class ScriptMockedHttpResponse {
 
     public ScriptMockedHttpResponse(int status, String responseResource, int responseTimeoutMs) {
         this.status = status;
-        this.data = ScriptTestUtils.fromResource(responseResource);
+        this.data = ScriptTestUtils.stringFromResource(responseResource);
         this.responseTimeoutMs = responseTimeoutMs;
     }
 

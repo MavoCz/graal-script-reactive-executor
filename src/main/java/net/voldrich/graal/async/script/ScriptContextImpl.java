@@ -11,6 +11,7 @@ import reactor.core.scheduler.Scheduler;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.Charset;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 // TODO implement Timeout when script is infinite and never ends ({response}) => new Promise(() => "Neverending story")
@@ -19,7 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
 class ScriptContextImpl implements ScriptContext {
 
     private final Context context;
-    private final Source source;
     private final Scheduler scheduler;
     private final ByteArrayOutputStream scriptOutputStream;
     private boolean closed = false;
@@ -27,9 +27,10 @@ class ScriptContextImpl implements ScriptContext {
     /** Map of currently running async operations in this context. These are cancelled if context is closed. */
     private final ConcurrentHashMap<Subscription, PromiseMonoSubscriber> runningOperationMap = new ConcurrentHashMap<>();
 
-    public ScriptContextImpl(Context context, Source source, Scheduler scheduler, ByteArrayOutputStream outputStream) {
+    private String transactionId = UUID.randomUUID().toString();
+
+    public ScriptContextImpl(Context context, Scheduler scheduler, ByteArrayOutputStream outputStream) {
         this.context = context;
-        this.source = source;
         this.scheduler = scheduler;
         this.scriptOutputStream = outputStream;
     }
@@ -50,11 +51,6 @@ class ScriptContextImpl implements ScriptContext {
     }
 
     @Override
-    public Value eval() {
-        return context.eval(source);
-    }
-
-    @Override
     public void close() {
         this.close(false);
     }
@@ -62,6 +58,16 @@ class ScriptContextImpl implements ScriptContext {
     @Override
     public void forceClose() {
         this.close(true);
+    }
+
+    @Override
+    public void setTransactionId() {
+        this.transactionId = transactionId;
+    }
+
+    @Override
+    public String getTransactionId() {
+        return transactionId;
     }
 
     @Override

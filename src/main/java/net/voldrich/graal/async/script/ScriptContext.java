@@ -7,8 +7,6 @@ import reactor.core.scheduler.Scheduler;
 
 public interface ScriptContext extends AutoCloseable {
 
-    Value eval();
-
     Value executeAsPromise(Mono<?> operation, String description);
 
     Context getContext();
@@ -24,4 +22,7 @@ public interface ScriptContext extends AutoCloseable {
 
     void forceClose();
 
+    void setTransactionId();
+
+    String getTransactionId();
 }

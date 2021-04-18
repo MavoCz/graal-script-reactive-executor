@@ -6,10 +6,8 @@ import com.codahale.metrics.Timer;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.logging.LoggingMeterRegistry;
 import lombok.extern.slf4j.Slf4j;
-import net.voldrich.graal.async.ScriptTestUtils;
-import net.voldrich.graal.async.api.ScriptMockedHttpClient;
+import net.voldrich.graal.async.api.MockedHttpClient;
 import net.voldrich.graal.async.api.ScriptMockedHttpResponse;
-import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -17,9 +15,6 @@ import reactor.core.scheduler.Schedulers;
 import reactor.util.concurrent.Queues;
 
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
-
-import static net.voldrich.graal.async.script.AsyncScriptExecutor.JS_LANGUAGE_TYPE;
 
 @Disabled
 @Slf4j
@@ -36,6 +31,8 @@ public class AsyncScriptExecutorPerformanceTest {
 
     protected Timer scriptTimer = metrics.timer("script-execution");
 
+    private MockedHttpClient mockedHttpClient;
+
     @BeforeAll
     static void beforeAll() {
         LoggingMeterRegistry loggingMeterRegistry = new LoggingMeterRegistry();
@@ -46,6 +43,9 @@ public class AsyncScriptExecutorPerformanceTest {
     @BeforeEach
     void setUp() {
         executor = new AsyncScriptExecutor.Builder().build();
+        mockedHttpClient = new MockedHttpClient();
+        mockedHttpClient.addResponse("/company/info", new ScriptMockedHttpResponse(200, "json/company-info.json", 50));
+        mockedHttpClient.addResponse("/company/ceo", new ScriptMockedHttpResponse(200, "json/ceo-list.json", 50));
     }
 
     @AfterEach
@@ -55,23 +55,12 @@ public class AsyncScriptExecutorPerformanceTest {
 
     @Test
     void smallPerfTest() {
-        Mono<String> script = executeScript("scripts/test-http-get.js", client -> {
-            client.addResponse("/company/info", new ScriptMockedHttpResponse(200, "json/company-info.json", 50));
-            client.addResponse("/company/ceo", new ScriptMockedHttpResponse(200, "json/ceo-list.json", 50));
-        });
+        Mono<String> script = executeScript("scripts/test-http-get.js");
         runScript(script, numberOfWarmupRequests, numberOfRequests);
     }
 
-    private Mono<String> executeScript(String scriptResource, Consumer<ScriptMockedHttpClient> configureClient) {
-        String script = ScriptTestUtils.fromResource(scriptResource);
-        return executor.executeScript(
-                script,
-                scriptContext -> {
-                    Value bindings = scriptContext.getContext().getBindings(JS_LANGUAGE_TYPE);
-                    ScriptMockedHttpClient client = new ScriptMockedHttpClient(scriptContext);
-                    configureClient.accept(client);
-                    bindings.putMember("client", client);
-                });
+    private Mono<String> executeScript(String scriptResource) {
+        return executor.executeScript(new TestScriptHandler(scriptResource, mockedHttpClient));
     }
 
     private void runScript(Mono<String> script, int warmupRequestCount, int requestCount) {

@@ -1,10 +1,18 @@
 package net.voldrich.graal.async;
 
+import net.voldrich.graal.async.script.ScriptUtils;
+import org.graalvm.polyglot.Source;
+
 import java.io.*;
 import java.util.stream.Collectors;
 
 public class ScriptTestUtils {
-    public static String fromResource(String resourcePath) {
+
+    public static Source sourceFromResource(String resourcePath) {
+        return ScriptUtils.parseScript(stringFromResource(resourcePath));
+    }
+
+    public static String stringFromResource(String resourcePath) {
         try {
             ClassLoader classLoader = ClassLoader.getSystemClassLoader();
             try (InputStream is = classLoader.getResourceAsStream(resourcePath)) {
