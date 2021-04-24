@@ -45,6 +45,12 @@ public class ScriptUtils {
     }
 
     public static String stringifyToString(Context context, Object data) {
+        if (data instanceof String) {
+            return (String) data;
+        }
+        if (data instanceof Value && ((Value)data).isString()) {
+            return ((Value)data).asString();
+        }
         return stringify(context, data).toString();
     }
 

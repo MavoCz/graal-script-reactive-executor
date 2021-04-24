@@ -11,7 +11,6 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 
 import java.io.ByteArrayOutputStream;
-import java.time.ZoneId;
 
 
 @Slf4j
@@ -113,14 +112,15 @@ public class AsyncScriptExecutor {
         }
     }
 
-    private ScriptContextImpl createNewContext(ScriptHandler scriptHandler,
+    private ScriptContextImpl createNewContext(ScriptHandler<?> scriptHandler,
                                                Scheduler scheduler) {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         Context.Builder contextBuilder = Context.newBuilder(JS_LANGUAGE_TYPE)
                 .engine(engine)
                 .out(outputStream)
-                .err(outputStream)
-                .timeZone(ZoneId.of("UTC"));
+                .err(outputStream);
+
+        scriptHandler.initiateContextBuilder(contextBuilder);
 
         Context context = contextBuilder.build();
         ScriptContextImpl scriptContextImpl = new ScriptContextImpl(context, scheduler, outputStream);
