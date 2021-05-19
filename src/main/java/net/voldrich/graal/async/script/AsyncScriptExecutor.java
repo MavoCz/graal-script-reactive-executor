@@ -6,17 +6,11 @@ import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.time.ZoneId;
-import java.util.function.Consumer;
-
-import static net.voldrich.graal.async.script.ScriptUtils.stringifyToString;
 
 
 @Slf4j
@@ -37,40 +31,22 @@ public class AsyncScriptExecutor {
                 : new ScriptSchedulers();
     }
 
-    public Mono<String> executeScript(String script, Consumer<ScriptContext> contextDecorator) {
-        return executeScript(parseScript(script), contextDecorator);
+    public <T> Mono<T> executeScript(ScriptHandler<T> scriptHandler) {
+        return Mono.defer(() -> {
+            Scheduler scheduler = scriptSchedulers.getNextScheduler();
+            return Mono.using(
+                    () -> createNewContext(scriptHandler, scheduler),
+                    context -> evaluateAndExecuteScript(context, scriptHandler),
+                    this::closeContext
+            ).subscribeOn(scheduler);
+        });
     }
 
-    public Mono<String> executeScript(Source source, Consumer<ScriptContext> contextDecorator) {
-        Scheduler scheduler = scriptSchedulers.getNextScheduler();
-        return Mono.using(
-                () -> createNewContext(source, contextDecorator, scheduler),
-                this::evaluateAndExecuteScript,
-                this::closeContext
-        ).subscribeOn(scheduler);
-    }
-
-    public Source parseScript(String script) {
-        try {
-            return Source.newBuilder(JS_LANGUAGE_TYPE, script, "script")
-                    .cached(true)
-                    .build();
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to parse script", e);
-        }
-    }
-
-    private Mono<String> evaluateAndExecuteScript(ScriptContextImpl scriptContextImpl) {
+    private <T> Mono<T> evaluateAndExecuteScript(ScriptContextImpl scriptContextImpl, ScriptHandler<T> scriptHandler) {
         Mono<Object> functionExecution = Mono.create(sink -> {
             sink.onCancel(scriptContextImpl::forceClose);
-            log.debug("Evaluating script");
             try {
-                Value response = scriptContextImpl.eval();
-
-                if (response.canExecute()) {
-                    response = response.execute();
-                }
-
+                Value response = scriptHandler.evaluateScript(scriptContextImpl);
                 sink.success(response);
             } catch (Exception e) {
                 sink.error(convertError(e, scriptContextImpl));
@@ -79,7 +55,14 @@ public class AsyncScriptExecutor {
 
         return functionExecution
                 .flatMap(response -> resolvePromise(response, scriptContextImpl))
-                .map(value -> stringifyToString(scriptContextImpl.getContext(), value));
+                .map(value -> scriptHandler.transformScriptResponse(scriptContextImpl, value))
+                .name("script-execution")
+                .metrics()
+                .doOnSubscribe(subscription -> log.debug("Evaluating script {}", scriptContextImpl.getTransactionId()))
+                .doOnSuccess(s -> log.debug("Script finished {}", scriptContextImpl.getTransactionId()))
+                .doOnError(error -> log.debug("Script failed {}: {}",
+                        scriptContextImpl.getTransactionId(),
+                        error.getMessage()));
     }
 
     private Mono<Object> resolvePromise(Object response, ScriptContextImpl scriptContextImpl) {
@@ -129,19 +112,19 @@ public class AsyncScriptExecutor {
         }
     }
 
-    private ScriptContextImpl createNewContext(Source source,
-                                               Consumer<ScriptContext> contextDecorator,
+    private ScriptContextImpl createNewContext(ScriptHandler<?> scriptHandler,
                                                Scheduler scheduler) {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         Context.Builder contextBuilder = Context.newBuilder(JS_LANGUAGE_TYPE)
                 .engine(engine)
                 .out(outputStream)
-                .err(outputStream)
-                .timeZone(ZoneId.of("UTC"));
+                .err(outputStream);
+
+        scriptHandler.initiateContextBuilder(contextBuilder);
 
         Context context = contextBuilder.build();
-        ScriptContextImpl scriptContextImpl = new ScriptContextImpl(context, source, scheduler, outputStream);
-        contextDecorator.accept(scriptContextImpl);
+        ScriptContextImpl scriptContextImpl = new ScriptContextImpl(context, scheduler, outputStream);
+        scriptHandler.initiateContext(scriptContextImpl);
         return scriptContextImpl;
     }
 

@@ -2,6 +2,7 @@ package net.voldrich.graal.async.script;
 
 import lombok.extern.slf4j.Slf4j;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 
 import java.io.BufferedReader;
@@ -11,8 +12,20 @@ import java.io.InputStreamReader;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static net.voldrich.graal.async.script.AsyncScriptExecutor.JS_LANGUAGE_TYPE;
+
 @Slf4j
 public class ScriptUtils {
+
+    public static Source parseScript(String script) {
+        try {
+            return Source.newBuilder(JS_LANGUAGE_TYPE, script, "script")
+                    .cached(true)
+                    .build();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to parse script", e);
+        }
+    }
 
     public static Value getGlobalMember(Context context, String name) {
         Value global = context.getBindings("js");
@@ -32,6 +45,12 @@ public class ScriptUtils {
     }
 
     public static String stringifyToString(Context context, Object data) {
+        if (data instanceof String) {
+            return (String) data;
+        }
+        if (data instanceof Value && ((Value)data).isString()) {
+            return ((Value)data).asString();
+        }
         return stringify(context, data).toString();
     }
 

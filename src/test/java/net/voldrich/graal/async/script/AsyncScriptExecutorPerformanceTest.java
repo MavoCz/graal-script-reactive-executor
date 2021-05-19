@@ -1,47 +1,51 @@
 package net.voldrich.graal.async.script;
 
-import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
-
-import org.graalvm.polyglot.Value;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
-
+import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import io.micrometer.core.instrument.Metrics;
-import io.micrometer.core.instrument.Timer;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import net.voldrich.graal.async.ScriptTestUtils;
-import net.voldrich.graal.async.api.ScriptMockedHttpClient;
+import io.micrometer.core.instrument.logging.LoggingMeterRegistry;
+import lombok.extern.slf4j.Slf4j;
+import net.voldrich.graal.async.api.MockedHttpClient;
 import net.voldrich.graal.async.api.ScriptMockedHttpResponse;
-import net.voldrich.graal.async.api.ScriptTimeout;
+import org.junit.jupiter.api.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.concurrent.Queues;
 
-import static net.voldrich.graal.async.script.AsyncScriptExecutor.JS_LANGUAGE_TYPE;
+import java.util.concurrent.TimeUnit;
 
 @Disabled
+@Slf4j
 public class AsyncScriptExecutorPerformanceTest {
     private AsyncScriptExecutor executor;
 
-    private static Timer scriptTimer;
+    private static final int numberOfWarmupRequests = 100;
+    private static final int numberOfRequests = 100000;
+
+    //private static final int concurrency = 10;
+    private static final int concurrency = Queues.SMALL_BUFFER_SIZE;
+
+    protected final MetricRegistry metrics = new MetricRegistry();
+
+    protected Timer scriptTimer = metrics.timer("script-execution");
+
+    private MockedHttpClient mockedHttpClient;
 
     @BeforeAll
     static void beforeAll() {
-        scriptTimer = Timer
-                .builder("my.timer")
-                .description("a description of what this timer does") // optional
-                .register(Metrics.globalRegistry);
+        LoggingMeterRegistry loggingMeterRegistry = new LoggingMeterRegistry();
+        Metrics.addRegistry(loggingMeterRegistry);
         Schedulers.enableMetrics();
-        System.setProperty(org.slf4j.impl.SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "INFO");
     }
 
     @BeforeEach
     void setUp() {
         executor = new AsyncScriptExecutor.Builder().build();
+        mockedHttpClient = new MockedHttpClient();
+        mockedHttpClient.addResponse("/company/info", new ScriptMockedHttpResponse(200, "json/company-info.json", 50));
+        mockedHttpClient.addResponse("/company/ceo", new ScriptMockedHttpResponse(200, "json/ceo-list.json", 50));
     }
 
     @AfterEach
@@ -51,35 +55,23 @@ public class AsyncScriptExecutorPerformanceTest {
 
     @Test
     void smallPerfTest() {
-        Mono<String> script = executeScript("scripts/test-http-get.js", client -> {
-            client.addResponse("/company/info", new ScriptMockedHttpResponse(200, "json/company-info.json", 50));
-            client.addResponse("/company/ceo", new ScriptMockedHttpResponse(200, "json/ceo-list.json", 50));
-        });
-        runScript(script, 100, 2000);
+        Mono<String> script = executeScript("scripts/test-http-get.js");
+        runScript(script, numberOfWarmupRequests, numberOfRequests);
     }
 
-    private Mono<String> executeScript(String scriptResource, Consumer<ScriptMockedHttpClient> configureClient) {
-        String script = ScriptTestUtils.fromResource(scriptResource);
-        return executor.executeScript(
-                script,
-                scriptContext -> {
-                    Value bindings = scriptContext.getContext().getBindings(JS_LANGUAGE_TYPE);
-                    bindings.putMember("timeout", new ScriptTimeout(scriptContext));
-                    ScriptMockedHttpClient client = new ScriptMockedHttpClient(scriptContext);
-                    configureClient.accept(client);
-                    bindings.putMember("client", client);
-                });
+    private Mono<String> executeScript(String scriptResource) {
+        return executor.executeScript(new TestScriptHandler(scriptResource, mockedHttpClient));
     }
 
     private void runScript(Mono<String> script, int warmupRequestCount, int requestCount) {
         runScript(script, warmupRequestCount);
         runScriptWithTimer(script, requestCount);
 
-        /*ConsoleReporter reporter = ConsoleReporter.forRegistry(metrics)
+        ConsoleReporter reporter = ConsoleReporter.forRegistry(metrics)
                 .convertRatesTo(TimeUnit.MILLISECONDS)
                 .convertDurationsTo(TimeUnit.MILLISECONDS)
                 .build();
-        reporter.report();*/
+        reporter.report();
     }
 
     private void runScript(Mono<String> scriptMono, int requestCount) {
@@ -90,7 +82,10 @@ public class AsyncScriptExecutorPerformanceTest {
 
     private void runScriptWithTimer(Mono<String> scriptMono, int requestCount) {
         Flux.range(1, requestCount)
-                .flatMap(integer -> scriptMono.name("script-execution").metrics())
+                .flatMap(integer -> Mono.using(
+                        () -> scriptTimer.time(),
+                        context -> scriptMono,
+                        Timer.Context::stop), concurrency)
                 .blockLast();
     }
 }

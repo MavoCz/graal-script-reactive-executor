@@ -2,33 +2,31 @@ package net.voldrich.graal.async.script;
 
 import lombok.extern.slf4j.Slf4j;
 import net.voldrich.graal.async.ScriptTestUtils;
-import net.voldrich.graal.async.api.ScriptMockedHttpClient;
+import net.voldrich.graal.async.api.MockedHttpClient;
 import net.voldrich.graal.async.api.ScriptMockedHttpResponse;
-import net.voldrich.graal.async.api.ScriptTimeout;
-import org.graalvm.polyglot.Value;
 import org.hamcrest.Matcher;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.skyscreamer.jsonassert.JSONAssert;
-
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.time.Duration;
 import java.util.function.Consumer;
 
-import static net.voldrich.graal.async.script.AsyncScriptExecutor.JS_LANGUAGE_TYPE;
-
 @Slf4j
 class AsyncScriptExecutorTest {
 
     private AsyncScriptExecutor executor;
 
+    private MockedHttpClient mockedHttpClient;
+
     @BeforeEach
     void setUp() {
         executor = new AsyncScriptExecutor.Builder().build();
+        mockedHttpClient = new MockedHttpClient();
     }
 
     @AfterEach
@@ -58,20 +56,11 @@ class AsyncScriptExecutorTest {
     }
 
     private Mono<String> executeScript(String scriptResource) {
-        return executeScript(scriptResource, scriptMockedHttpClient -> {});
+        return executeScript(scriptResource, null);
     }
 
-    private Mono<String> executeScript(String scriptResource, Consumer<ScriptMockedHttpClient> configureClient) {
-
-        return executor.executeScript(
-                ScriptTestUtils.fromResource(scriptResource),
-                scriptContext -> {
-                    Value bindings = scriptContext.getContext().getBindings(JS_LANGUAGE_TYPE);
-                    bindings.putMember("timeout", new ScriptTimeout(scriptContext));
-                    ScriptMockedHttpClient client = new ScriptMockedHttpClient(scriptContext);
-                    configureClient.accept(client);
-                    bindings.putMember("client", client);
-                });
+    private Mono<String> executeScript(String scriptResource, MockedHttpClient mockedHttpClient) {
+        return executor.executeScript(new TestScriptHandler(scriptResource, mockedHttpClient));
     }
 
     @Test
@@ -94,10 +83,9 @@ class AsyncScriptExecutorTest {
 
     @Test
     void testScriptWithUsingClient() {
-        Mono<String> stringMono = executeScript("scripts/test-http-get.js", client -> {
-            client.addResponse("/company/info", new ScriptMockedHttpResponse(200, "json/company-info.json", 50));
-            client.addResponse("/company/ceo", new ScriptMockedHttpResponse(200, "json/ceo-list.json", 100));
-        });
+        mockedHttpClient.addResponse("/company/info", new ScriptMockedHttpResponse(200, "json/company-info.json", 50));
+        mockedHttpClient.addResponse("/company/ceo", new ScriptMockedHttpResponse(200, "json/ceo-list.json", 100));
+        Mono<String> stringMono = executeScript("scripts/test-http-get.js", mockedHttpClient);
         StepVerifier.create(stringMono)
                 .consumeNextWith(verifyJsonMatchesResource("json/expected-response-client.json"))
                 .verifyComplete();
@@ -105,9 +93,8 @@ class AsyncScriptExecutorTest {
 
     @Test
     void testScriptWithUsingClientParralel() {
-        Mono<String> stringMono = executeScript("scripts/test-http-get-parralel.js", client -> {
-            client.addResponse("/company/info", new ScriptMockedHttpResponse(200, "json/company-info.json", 100));
-        });
+        mockedHttpClient.addResponse("/company/info", new ScriptMockedHttpResponse(200, "json/company-info.json", 100));
+        Mono<String> stringMono = executeScript("scripts/test-http-get-parralel.js", mockedHttpClient);
         StepVerifier.create(stringMono)
                 .consumeNextWith(verifyJsonMatchesResource("json/expected-response-parralel.json"))
                 .verifyComplete();
@@ -115,9 +102,8 @@ class AsyncScriptExecutorTest {
 
     @Test
     void testScriptWithUsingClientException() {
-        Mono<String> stringMono = executeScript("scripts/test-http-get.js", client -> {
-            client.addResponse("/company/info", new ScriptMockedHttpResponse(200, "json/company-info.json", 50));
-        });
+        mockedHttpClient.addResponse("/company/info", new ScriptMockedHttpResponse(200, "json/company-info.json", 50));
+        Mono<String> stringMono = executeScript("scripts/test-http-get.js", mockedHttpClient);
         StepVerifier.create(stringMono)
                 .expectErrorSatisfies(verifyScriptException(
                         Matchers.startsWith("java.lang.RuntimeException: 404 NOT FOUND"),
@@ -129,7 +115,7 @@ class AsyncScriptExecutorTest {
         return json -> {
             log.debug("Received next: {}", json);
             try {
-                JSONAssert.assertEquals(ScriptTestUtils.fromResource(resourceName), json, false);
+                JSONAssert.assertEquals(ScriptTestUtils.stringFromResource(resourceName), json, false);
             } catch (Exception exception) {
                 throw new AssertionError(exception);
             }
