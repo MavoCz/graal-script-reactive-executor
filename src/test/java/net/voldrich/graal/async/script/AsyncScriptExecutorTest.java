@@ -77,7 +77,7 @@ class AsyncScriptExecutorTest {
         Mono<String> stringMono = executeScript("scripts/test-script-error-eval.js");
         StepVerifier.create(stringMono)
                 .expectErrorSatisfies(verifyScriptException(
-                        Matchers.startsWith("ReferenceError: company is not defined"), null))
+                        Matchers.startsWith("org.graalvm.polyglot.PolyglotException: ReferenceError: company is not defined"), null))
                 .verify();
     }
 
