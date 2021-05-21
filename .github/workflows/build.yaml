@@ -26,5 +26,5 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
           maven-repo-server-id: github
-            maven-repo-server-username: ${{ secrets.MAVEN_REPO_USER }}
-            maven-repo-server-password: ${{ secrets.MAVEN_REPO_PASSWORD }}
+          maven-repo-server-username: ${{ secrets.MAVEN_REPO_USER }}
+          maven-repo-server-password: ${{ secrets.MAVEN_REPO_PASSWORD }}
