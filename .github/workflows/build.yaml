@@ -28,3 +28,4 @@ jobs:
           maven-repo-server-id: github
           maven-repo-server-username: ${{ secrets.MAVEN_REPO_USER }}
           maven-repo-server-password: ${{ secrets.MAVEN_REPO_PASSWORD }}
+          release-branch-name: "main"
