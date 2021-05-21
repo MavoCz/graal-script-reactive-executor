@@ -21,3 +21,10 @@ jobs:
           restore-keys: ${{ runner.os }}-m2
       - name: Build with Maven
         run: mvn --batch-mode --update-snapshots verify
+      - name: Release
+          uses: qcastel/github-actions-maven-release@v1.12.25
+          with:
+            ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+            maven-repo-server-id: github
+              maven-repo-server-username: ${{ secrets.MAVEN_REPO_USER }}
+              maven-repo-server-password: ${{ secrets.MAVEN_REPO_PASSWORD }}
