@@ -22,7 +22,7 @@ jobs:
       - name: Build with Maven
         run: mvn --batch-mode --update-snapshots verify
       - name: Release
-          uses: qcastel/github-actions-maven-release@v1.12.25
+          uses: qcastel/github-actions-maven-release@master
           with:
             ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
             maven-repo-server-id: github
