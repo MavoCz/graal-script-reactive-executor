@@ -14,7 +14,7 @@ Example usage:
 
 See unit test net.voldrich.graal.async.UsageExampleTest. 
 
-Create and configure script async executor
+Create and configure script async executor:
      
     AsyncScriptExecutor executor = new AsyncScriptExecutor.Builder().build();
 
