@@ -29,3 +29,5 @@ jobs:
           maven-repo-server-username: ${{ secrets.MAVEN_REPO_USER }}
           maven-repo-server-password: ${{ secrets.MAVEN_REPO_PASSWORD }}
           release-branch-name: "main"
+        env:
+          JAVA_HOME: /opt/hostedtoolcache/Java_Adopt_jdk/11.0.11-9/x64
